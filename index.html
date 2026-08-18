@@ -280,7 +280,7 @@
             playlist.push({ name: cleanName, url: URL.createObjectURL(files[i]) });
         }
         updateUI();
-            function updateUI() {
+                function updateUI() {
         trackList.innerHTML = '';
         if (playlist.length === 0) {
             title.textContent = "Плеер пуст";
@@ -310,7 +310,9 @@
             deleteBtn.style.fontSize = '12px';
             deleteBtn.style.transition = 'transform 0.1s';
             
-            deleteBtn.addEventListener('hover', () => deleteBtn.style.transform = 'scale(1.2)');
+            // ИСПРАВЛЕНО: Правильные события наведения мыши в JS
+            deleteBtn.addEventListener('mouseenter', () => deleteBtn.style.transform = 'scale(1.3)');
+            deleteBtn.addEventListener('mouseleave', () => deleteBtn.style.transform = 'scale(1.0)');
             
             // Логика клика по крестику
             deleteBtn.addEventListener('click', (e) => {

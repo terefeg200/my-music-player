@@ -394,24 +394,6 @@
 
                 updateUI(); // Перерисовываем список на экране
 
-                // Бесшумно сообщаем боту, что трек удален
-                if (window.Telegram && window.Telegram.WebApp) {
-                    const dataToSend = { action: "delete", index: index };
-                    window.Telegram.WebApp.sendData(JSON.stringify(dataToSend));
-                }
-            });
-
-            if (index === currentIndex) {
-                li.classList.add('active');
-            }
-
-            li.appendChild(textSpan);
-            li.appendChild(deleteBtn);
-            trackList.appendChild(li);
-        });
-    }
-
-
 </script>
 </body>
 </html>

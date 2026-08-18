@@ -240,11 +240,45 @@
     let isRewinding = false;
 
        // НАДЕЖНЫЙ ВАРИАНТ ПЕРЕХВАТА ТРЕКОВ БЕЗ ОШИБОК:
-    window.addEventListener('DOMContentLoaded', () => {
+        window.addEventListener('DOMContentLoaded', () => {
+        let userId = null;
+
+        // 1. Подключаем Telegram API и вытаскиваем ID пользователя
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
+            
+            const user = window.Telegram.WebApp.initDataUnsafe?.user;
+            if (user && user.id) {
+                userId = user.id;
+            }
         }
+
+        // Если запустили внутри ТГ и получили ID
+        if (userId) {
+            title.textContent = "Загрузка медиатеки...";
+            
+            // 2. Делаем прямой запрос к твоему Python-серверу на ПК
+            fetch(`http://localhost:8000/get-playlist?user_id=${userId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.length > 0) {
+                        playlist = data;
+                        updateUI();
+                        changeTrack(0, false); // Подгружаем первый трек, но не играем сразу
+                    } else {
+                        title.textContent = "Твой плейлист пуст";
+                    }
+                })
+                .catch(err => {
+                    console.error("Ошибка сети с ботом:", err);
+                    title.textContent = "Ошибка связи с ПК";
+                });
+        } else {
+            title.textContent = "Запущено вне Telegram";
+        }
+    });
+
 
         const urlParams = new URLSearchParams(window.location.search);
         const tracksParam = urlParams.get('tracks');

@@ -221,7 +221,7 @@
     </div>
 
 <script>
-       const fileSelector = document.getElementById('file-selector');
+    const fileSelector = document.getElementById('file-selector');
     const audioCore = document.getElementById('audio-core');
     const trackList = document.getElementById('track-list');
     
@@ -239,42 +239,37 @@
     let currentIndex = 0;
     let isRewinding = false;
 
-    // --- МАГИЯ СВЯЗИ С ТЕЛЕГРАМОМ ---
+    // --- АВТОНОМНЫЙ ПЕРЕХВАТ ТРЕКОВ ИЗ ТЕЛЕГРАМА ---
     window.addEventListener('DOMContentLoaded', () => {
-        // Инициализируем Telegram WebApp API
-        const tg = window.Telegram.WebApp;
-        tg.ready(); // Сообщаем ТГ, что приложение загрузилось
-        tg.expand(); // Разворачиваем плеер на весь экран смартфона
+        // Подключаем Telegram API интерфейс
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+        }
 
-        // Берём ID пользователя, который открыл приложение
-        const user = tg.initDataUnsafe?.user;
-        
-        if (user && user.id) {
-            title.textContent = "Загрузка медиатеки...";
-            
-            // Делаем запрос к твоему запущенному Python боту (на порт 5000)
-            // ВАЖНО: Вместо localhost впиши свой IP или адрес туннеля ngrok, если тестируешь с телефона!
-            fetch(`http://localhost:5000/get_playlist?user_id=${user.id}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data && data.length > 0) {
-                        playlist = data;
-                        updateUI();
-                        changeTrack(0, false); // Подгружаем первый трек из базы бота
-                    } else {
-                        title.textContent = "Твой плейлист пуст";
-                    }
-                })
-                .catch(err => {
-                    console.error("Ошибка сети с ботом:", err);
-                    title.textContent = "Ошибка связи с ботом";
-                });
-        } else {
-            title.textContent = "Запущено вне Telegram";
+        // Читаем параметры адресной строки
+        const urlParams = new URLSearchParams(window.location.search);
+        const tracksParam = urlParams.get('tracks');
+
+        if (tracksParam) {
+            try {
+                // Раскодируем JSON, который прислал бот
+                const decodedData = decodeURIComponent(tracksParam);
+                const incomingTracks = JSON.parse(decodedData);
+                
+                if (incomingTracks && incomingTracks.length > 0) {
+                    playlist = incomingTracks;
+                    updateUI();
+                    changeTrack(0, false); // Подгружаем первый трек, но не включаем без клика
+                }
+            } catch (e) {
+                console.error("Ошибка чтения плейлиста от бота:", e);
+                title.textContent = "Ошибка загрузки списка";
+            }
         }
     });
 
-    // Обычный выбор файлов кнопкой (оставляем для теста на ПК)
+    // Оставляем обычный выбор файлов кнопкой для тестов на ПК
     fileSelector.addEventListener('change', function(e) {
         const files = e.target.files;
         if (!files || files.length === 0) return;
@@ -290,7 +285,10 @@
 
     function updateUI() {
         trackList.innerHTML = '';
-        if (playlist.length === 0) return;
+        if (playlist.length === 0) {
+            title.textContent = "Плеер пуст";
+            return;
+        }
         playlist.forEach((track, index) => {
             const li = document.createElement('li');
             li.textContent = `${index + 1}. ${track.name}`;
@@ -308,7 +306,7 @@
         title.textContent = playlist[index].name;
         updateUI();
         if (startPlay) {
-            audioCore.play().catch(err => console.log("Ждем клика..."));
+            audioCore.play().catch(err => console.log("Ожидание клика..."));
         }
     }
 

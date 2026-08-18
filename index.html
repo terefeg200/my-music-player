@@ -239,13 +239,37 @@
     let currentIndex = 0;
     let isRewinding = false;
 
-    // --- АВТОНОМНЫЙ ПЕРЕХВАТ ТРЕКОВ ИЗ ТЕЛЕГРАМА ---
+    // ТЕСТОВЫЙ ВАРИАНТ ДЛЯ ОПРЕДЕЛЕНИЯ ПРИЧИНЫ:
     window.addEventListener('DOMContentLoaded', () => {
-        // Подключаем Telegram API интерфейс
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
         }
+
+        // Выводим параметры на экран, чтобы увидеть, что прислал бот
+        title.textContent = "Строка: " + window.location.search;
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const tracksParam = urlParams.get('tracks');
+
+        if (tracksParam) {
+            try {
+                const decodedData = decodeURIComponent(tracksParam);
+                const incomingTracks = JSON.parse(decodedData);
+                
+                if (incomingTracks && incomingTracks.length > 0) {
+                    playlist = incomingTracks;
+                    updateUI();
+                    changeTrack(0, false); 
+                } else {
+                    title.textContent = "Массив в JSON пуст";
+                }
+            } catch (e) {
+                title.textContent = "Сбой JSON: " + e.message;
+            }
+        }
+    });
+
 
         // Читаем параметры адресной строки
         const urlParams = new URLSearchParams(window.location.search);

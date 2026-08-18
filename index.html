@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YT Music Макси</title>
-    <!-- Подключаем официальный скрипт Telegram API -->
-    <script src="https://telegram.org"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -18,26 +16,30 @@
             margin: 0;
         }
 
+        /* Увеличенный контейнер плеера */
         .player-container {
             background: #0f0f0f;
             border: 1px solid #222;
             border-radius: 16px;
             padding: 24px;
-            width: 480px; 
+            width: 480px; /* Ширина увеличена с 340px до 480px */
             box-shadow: 0 12px 36px rgba(0,0,0,0.7);
             box-sizing: border-box;
         }
 
+        /* Увеличенный блок трека */
         .track-info {
             display: flex;
             align-items: center;
             gap: 20px;
             margin-bottom: 24px;
+            /* Защита от искажения: запрещаем блоку раздуваться */
             min-width: 0; 
         }
 
+        /* Увеличенная обложка */
         .cover {
-            width: 80px; 
+            width: 80px; /* Увеличено с 50px */
             height: 80px;
             border-radius: 50%;
             background: #222;
@@ -47,21 +49,24 @@
             justify-content: center;
             font-size: 32px;
             color: #f267ff;
-            flex-shrink: 0; 
+            flex-shrink: 0; /* Запрещаем обложке сжиматься */
         }
 
+        /* Контейнер для текста */
         .meta {
             flex-grow: 1;
+            /* Жесткое ограничение по ширине, чтобы текст уходил в троеточие */
             min-width: 0; 
         }
 
+        /* Защита названия от длинных имен */
         .title {
-            font-size: 20px; 
+            font-size: 20px; /* Увеличен шрифт */
             font-weight: bold;
             margin: 0 0 6px 0;
-            white-space: nowrap; 
-            overflow: hidden;    
-            text-overflow: ellipsis; 
+            white-space: nowrap; /* Текст в одну строку */
+            overflow: hidden;    /* Прячем то, что не влезло */
+            text-overflow: ellipsis; /* Добавляем три точки на конце */
         }
 
         .author {
@@ -70,6 +75,7 @@
             margin: 0;
         }
 
+        /* Крупные кнопки управления */
         .controls {
             display: flex;
             justify-content: center;
@@ -82,7 +88,7 @@
             background: none;
             border: none;
             color: #ffffffdc;
-            font-size: 36px; 
+            font-size: 36px; /* Увеличен размер иконок */
             cursor: pointer;
             padding: 5px;
             transition: transform 0.1s;
@@ -93,6 +99,7 @@
             color: #ff6df8;
         }
 
+        /* Увеличенная полоса прогресса */
         .progress-container {
             display: flex;
             align-items: center;
@@ -105,7 +112,30 @@
         .progress-bar {
             flex-grow: 1;
             cursor: pointer;
-            height: 6px; 
+            height: 6px; /* Чуть толще для удобства клика */
+        }
+
+        /* Крупная кнопка добавления */
+        .upload-btn {
+            display: block;
+            text-align: center;
+            font-size: 15px;
+            color: #aaa;
+            border: 2px dashed #444;
+            padding: 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: 0.2s;
+        }
+
+        .upload-btn:hover {
+            border-color: #ff55f7;
+            color: #ffffffda;
+        }
+
+        input[type="file"] {
+            display: none;
         }
 
         .playlist-title {
@@ -116,11 +146,12 @@
             letter-spacing: 1px;
         }
 
+        /* Увеличенный список треков */
         .playlist {
             list-style: none;
             padding: 0;
             margin: 0;
-            max-height: 180px; 
+            max-height: 180px; /* Списку дали больше места */
             overflow-y: auto;
         }
 
@@ -130,6 +161,7 @@
             border-radius: 6px;
             cursor: pointer;
             color: #aaa;
+            /* Защита от длинных имен внутри самого списка */
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -145,11 +177,6 @@
             background: #222;
             font-weight: bold;
         }
-
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
     </style>
 </head>
 <body>
@@ -157,7 +184,7 @@
     <div class="player-container">
         <!-- Блок трека -->
         <div class="track-info">
-            <div class="cover" id="cover-art">♫</div>
+            <div class="cover">♫</div>
             <div class="meta">
                 <p class="title" id="title">Плеер пуст</p>
                 <p class="author">Musicspot</p>
@@ -181,12 +208,19 @@
             <button class="btn" id="next-btn">⏭</button>
         </div>
 
-        <!-- Очередь воспроизведения -->
+        <!-- Кнопка добавления -->
+        <label class="upload-btn">
+            + Выбрать музыку (можно много файлов)
+            <input type="file" id="file-selector" accept="audio/*" multiple>
+        </label>
+
+        <!-- Очередь -->
         <div class="playlist-title">Очередь воспроизведения</div>
         <ul class="playlist" id="track-list"></ul>
     </div>
 
 <script>
+    const fileSelector = document.getElementById('file-selector');
     const audioCore = document.getElementById('audio-core');
     const trackList = document.getElementById('track-list');
     
@@ -198,182 +232,100 @@
     const timeNow = document.getElementById('time-now');
     const timeMax = document.getElementById('time-max');
     const title = document.getElementById('title');
-    const coverArt = document.getElementById('cover-art');
 
     let playlist = [];
     let currentIndex = 0;
-    let isRewinding = false;
 
-    // Автоматическая загрузка треков с ПК при старте
-    window.addEventListener('DOMContentLoaded', () => {
-        let userId = null;
+    fileSelector.addEventListener('change', function(e) {
+        const files = e.target.files;
+        if (files.length === 0) return;
 
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.ready();
-            window.Telegram.WebApp.expand();
-            
-            // Получаем данные пользователя Telegram
-            const user = window.Telegram.WebApp.initDataUnsafe?.user;
-            if (user && user.id) {
-                userId = user.id;
-            }
+        const isPlaylistEmpty = playlist.length === 0;
+
+        for (let i = 0; i < files.length; i++) {
+            playlist.push({
+                name: files[i].name,
+                url: URL.createObjectURL(files[i])
+            });
         }
 
-        if (userId) {
-            title.textContent = "Загрузка медиатеки...";
-            
-            // Скачиваем актуальный плейлист с твоего запущенного бота на ПК
-            fetch(`http://localhost:8000/get-playlist?user_id=${userId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data && data.length > 0) {
-                        playlist = data;
-                        updateUI();
-                        changeTrack(0, false); // Подгружаем первый трек в плеер
-                    } else {
-                        title.textContent = "Плейлист пуст";
-                    }
-                })
-                .catch(err => {
-                    console.error("Ошибка связи с ботом:", err);
-                    title.textContent = "Ошибка связи с ПК";
-                });
-        } else {
-            title.textContent = "Запустите бота в Telegram";
+        updateUI();
+
+        if (isPlaylistEmpty) {
+            changeTrack(0);
         }
     });
 
-    // Функция обновления списка на экране + кнопки удаления
     function updateUI() {
         trackList.innerHTML = '';
-        if (playlist.length === 0) {
-            title.textContent = "Плеер пуст";
-            return;
-        }
-
         playlist.forEach((track, index) => {
             const li = document.createElement('li');
-            li.style.display = 'flex';
-            li.style.justifyContent = 'space-between';
-            li.style.alignItems = 'center';
-
-            const textSpan = document.createElement('span');
-            textSpan.textContent = `${index + 1}. ${track.name}`;
-            textSpan.style.flexGrow = '1';
-            textSpan.style.overflow = 'hidden';
-            textSpan.style.textOverflow = 'ellipsis';
-            textSpan.addEventListener('click', () => changeTrack(index, true));
-
-            const deleteBtn = document.createElement('span');
-            deleteBtn.textContent = '❌';
-            deleteBtn.style.cursor = 'pointer';
-            deleteBtn.style.padding = '0 5px';
-            deleteBtn.style.fontSize = '12px';
-            
-            deleteBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Запрещаем треку играть при клике на крестик
-                
-                // Шлем сигнал боту, чтобы стёр трек у себя
-                if (window.Telegram && window.Telegram.WebApp) {
-                    const dataToSend = { action: "delete", index: index };
-                    window.Telegram.WebApp.sendData(JSON.stringify(dataToSend));
-                }
-
-                playlist.splice(index, 1);
-                if (index === currentIndex) {
-                    audioCore.pause();
-                    audioCore.src = '';
-                    title.textContent = "Плеер пуст";
-                } else if (index < currentIndex) {
-                    currentIndex--;
-                }
-                updateUI();
-            });
-
+            li.textContent = `${index + 1}. ${track.name}`;
             if (index === currentIndex) {
                 li.classList.add('active');
             }
-
-            li.appendChild(textSpan);
-            li.appendChild(deleteBtn);
+            li.addEventListener('click', () => changeTrack(index));
             trackList.appendChild(li);
         });
     }
 
-    // Смена песни
-    function changeTrack(index, startPlay = true) {
-        if (playlist.length === 0 || index < 0 || index >= playlist.length) return;
+    function changeTrack(index) {
+        if (index < 0 || index >= playlist.length) return;
         currentIndex = index;
         audioCore.src = playlist[index].url;
-        audioCore.load();
         title.textContent = playlist[index].name;
         updateUI();
-        if (startPlay) {
-            audioCore.play().catch(err => console.log("Ожидание запуска пользователем"));
-        }
+        audioCore.play();
     }
 
-    // Управление воспроизведением
     playBtn.addEventListener('click', function() {
         if (playlist.length === 0) return;
         if (audioCore.paused) {
-            audioCore.play().catch(err => console.error(err));
+            audioCore.play();
         } else {
             audioCore.pause();
         }
     });
 
-    audioCore.addEventListener('play', () => {
-    playBtn.textContent = '⏸';
-    if (coverArt) coverArt.style.animation = 'spin 4s linear infinite'
-    });
-
-    audioCore.addEventListener('pause', () => {
-    playBtn.textContent = '▶';
-    if (coverArt) coverArt.style.animation = 'none';
-    });
+    audioCore.addEventListener('play', () => playBtn.textContent = '⏸');
+    audioCore.addEventListener('pause', () => playBtn.textContent = '▶');
 
     nextBtn.addEventListener('click', function() {
-    if (playlist.length === 0) return;
-    let nextIndex = currentIndex + 1;
-    if (nextIndex >= playlist.length) nextIndex = 0;
-    changeTrack(nextIndex, true);
+        if (playlist.length === 0) return;
+        let nextIndex = currentIndex + 1 < playlist.length ? currentIndex + 1 : 0;
+        changeTrack(nextIndex);
     });
 
-   prevBtn.addEventListener('click', function() {
-    if (playlist.length === 0) return;
-    let prevIndex = currentIndex - 1;
-    if (prevIndex < 0) prevIndex = playlist.length - 1;
-    changeTrack(prevIndex, true);
+    prevBtn.addEventListener('click', function() {
+        if (playlist.length === 0) return;
+        let prevIndex = currentIndex - 1 >= 0 ? currentIndex - 1 : playlist.length - 1;
+        changeTrack(prevIndex);
+    });
+
+    audioCore.addEventListener('ended', function() {
+        nextBtn.click();
+    });
+
+    audioCore.addEventListener('timeupdate', function() {
+        if (!isNaN(audioCore.duration)) {
+            const progressPct = (audioCore.currentTime / audioCore.duration) * 100;
+            timeline.value = progressPct;
+            timeNow.textContent = formatTime(audioCore.currentTime);
+            timeMax.textContent = formatTime(audioCore.duration);
+        }
+    });
+
+    timeline.addEventListener('input', function() {
+        if (audioCore.duration) {
+            audioCore.currentTime = (timeline.value / 100) * audioCore.duration;
+        }
     });
 
     function formatTime(seconds) {
-    if (isNaN(seconds) || seconds === Infinity) return "0:00";
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return ${mins}:${secs < 10 ? '0' : ''}${secs};
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
+        return `${mins}:${secs}`;
     }
-
-    audioCore.addEventListener('loadedmetadata', () => {
-    timeline.max = Math.floor(audioCore.duration);
-    timeMax.textContent = formatTime(audioCore.duration);
-    });
-
-    audioCore.addEventListener('timeupdate', () => {
-    if (!isRewinding) {timeline.value = Math.floor(audioCore.currentTime);
-    timeNow.textContent = formatTime(audioCore.currentTime);
-    }
-    });
-
-    timeline.addEventListener('input', () => {
-    isRewinding = true;
-    timeNow.textContent = formatTime(timeline.value);
-    });
-
-    timeline.addEventListener('change', () => {
-    audioCore.currentTime = timeline.value;
-    isRewinding = false;
-    });
-    audioCore.addEventListener('ended', () => { 
-    nextBtn.click(); 
-    });
+</script>
+</body>
+</html>

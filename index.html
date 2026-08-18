@@ -239,12 +239,42 @@
     let currentIndex = 0;
     let isRewinding = false;
 
-    // ТЕСТОВЫЙ ВАРИАНТ ДЛЯ ОПРЕДЕЛЕНИЯ ПРИЧИНЫ:
+       // НАДЕЖНЫЙ ВАРИАНТ ПЕРЕХВАТА ТРЕКОВ БЕЗ ОШИБОК:
     window.addEventListener('DOMContentLoaded', () => {
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
         }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const tracksParam = urlParams.get('tracks');
+
+        if (tracksParam) {
+            try {
+                const decodedData = decodeURIComponent(tracksParam);
+                const incomingTracks = JSON.parse(decodedData);
+                
+                if (incomingTracks && incomingTracks.length > 0) {
+                    // Очищаем массив: берем ТОЛЬКО имя и ссылку, отбрасывая мусор
+                    playlist = incomingTracks.map(track => ({
+                        name: track.name,
+                        url: track.url
+                    }));
+                    
+                    updateUI();
+                    changeTrack(0, false); // Подгружаем первый трек, но не включаем сам
+                } else {
+                    title.textContent = "Очередь пуста";
+                }
+            } catch (e) {
+                console.error("Ошибка разбора треков:", e);
+                title.textContent = "Ошибка загрузки списка";
+            }
+        } else {
+            title.textContent = "Плеер пуст";
+        }
+    });
+
 
         // Выводим параметры на экран, чтобы увидеть, что прислал бот
         title.textContent = "Строка: " + window.location.search;

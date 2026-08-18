@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YT Music Макси</title>
-    <!-- Подключаем Telegram Web App SDK -->
     <script src="https://telegram.org"></script>
     <style>
         body {
@@ -17,8 +16,6 @@
             height: 100vh;
             margin: 0;
         }
-
-        /* Контейнер плеера */
         .player-container {
             background: #0f0f0f;
             border: 1px solid #222;
@@ -28,8 +25,6 @@
             box-shadow: 0 12px 36px rgba(0,0,0,0.7);
             box-sizing: border-box;
         }
-
-        /* Блок трека */
         .track-info {
             display: flex;
             align-items: center;
@@ -37,8 +32,6 @@
             margin-bottom: 24px;
             min-width: 0; 
         }
-
-        /* Обложка */
         .cover {
             width: 80px; 
             height: 80px;
@@ -52,14 +45,10 @@
             color: #f267ff;
             flex-shrink: 0; 
         }
-
-        /* Контейнер для текста */
         .meta {
             flex-grow: 1;
             min-width: 0; 
         }
-
-        /* Название трека */
         .title {
             font-size: 20px; 
             font-weight: bold;
@@ -68,14 +57,11 @@
             overflow: hidden;    
             text-overflow: ellipsis; 
         }
-
         .author {
             font-size: 14px;
             color: #aaa;
             margin: 0;
         }
-
-        /* Кнопки управления */
         .controls {
             display: flex;
             justify-content: center;
@@ -83,7 +69,6 @@
             gap: 35px;
             margin-bottom: 24px;
         }
-
         .btn {
             background: none;
             border: none;
@@ -93,13 +78,10 @@
             padding: 5px;
             transition: transform 0.1s;
         }
-
         .btn:hover {
             transform: scale(1.1);
             color: #ff6df8;
         }
-
-        /* Полоса прогресса */
         .progress-container {
             display: flex;
             align-items: center;
@@ -108,13 +90,11 @@
             color: #aaa;
             margin-bottom: 24px;
         }
-
         .progress-bar {
             flex-grow: 1;
             cursor: pointer;
             height: 6px; 
         }
-
         .playlist-title {
             font-size: 13px;
             color: #aaa;
@@ -122,8 +102,6 @@
             text-transform: uppercase;
             letter-spacing: 1px;
         }
-
-        /* Список треков */
         .playlist {
             list-style: none;
             padding: 0;
@@ -131,7 +109,6 @@
             max-height: 180px; 
             overflow-y: auto;
         }
-
         .playlist li {
             display: flex;
             justify-content: space-between;
@@ -142,18 +119,15 @@
             cursor: pointer;
             color: #aaa;
         }
-
         .playlist li:hover {
             background: #222;
             color: #ffffffb4;
         }
-
         .playlist li.active {
             color: #ff48ff;
             background: #222;
             font-weight: bold;
         }
-
         .track-name-text {
             white-space: nowrap;
             overflow: hidden;
@@ -161,7 +135,6 @@
             flex-grow: 1;
             margin-right: 10px;
         }
-
         .delete-btn {
             background: none;
             border: none;
@@ -175,39 +148,33 @@
 <body>
 
     <div class="player-container">
-        <!-- Блок трека -->
         <div class="track-info">
             <div class="cover">♫</div>
             <div class="meta">
-                <p class="title" id="title">Загрузка...</p>
+                <p class="title" id="title">Загрузка плейлиста...</p>
                 <p class="author">Telegram Cloud</p>
             </div>
         </div>
 
-        <!-- Аудио-движок -->
         <audio id="audio-core"></audio>
 
-        <!-- Прогресс -->
         <div class="progress-container">
             <span id="time-now">0:00</span>
             <input type="range" class="progress-bar" id="timeline" value="0" min="0" max="100">
             <span id="time-max">0:00</span>
         </div>
 
-        <!-- Кнопки управления -->
         <div class="controls">
             <button class="btn" id="prev-btn">⏮</button>
             <button class="btn" id="play-btn" style="font-size: 46px;">▶</button>
             <button class="btn" id="next-btn">⏭</button>
         </div>
 
-        <!-- Очередь -->
         <div class="playlist-title">Очередь воспроизведения</div>
         <ul class="playlist" id="track-list"></ul>
     </div>
 
 <script>
-    // Инициализация Telegram Web App
     const tg = window.Telegram.WebApp;
     if (tg) {
         tg.ready();
@@ -227,42 +194,34 @@
     let playlist = [];
     let currentIndex = 0;
 
-    // Безопасный разбор треков из адресной строки
-    function loadPlaylistFromUrl() {
-        const searchSource = window.location.search || window.location.hash.substring(window.location.hash.indexOf('?'));
-        const urlParams = new URLSearchParams(searchSource);
-        const tracksParam = urlParams.get('tracks');
+    // ВНИМАНИЕ: Замените на вашу ссылку от ngrok или http://localhost:8000 если проверяете на ПК в Telegram Desktop
+    const SERVER_URL = "http://localhost:8000"; 
+
+    // Загрузка треков напрямую с вашего сервера по API
+    async function loadTracksFromServer() {
+        // Достаем ID пользователя из Telegram SDK
+        const userId = tg?.initDataUnsafe?.user?.id || 0;
         
-        if (tracksParam) {
-            try {
-                const decodedData = decodeURIComponent(decodeURIComponent(tracksParam));
-                const parsed = JSON.parse(decodedData);
-                
-                if (Array.isArray(parsed)) {
-                    playlist = parsed.map(track => {
-                        let nameVal = track.name;
-                        if (Array.isArray(nameVal)) {
-                            nameVal = nameVal[0];
-                        }
-                        return {
-                            name: String(nameVal || "Без названия"),
-                            url: String(track.url || "")
-                        };
-                    });
-                }
-                
-                if (playlist.length > 0) {
-                    updateUI();
-                    initTrack(0);
-                } else {
-                    title.textContent = "В плейлисте нет треков";
-                }
-            } catch (e) {
-                console.error("Ошибка парсинга:", e);
-                title.textContent = "Ошибка чтения данных";
+        if (!userId) {
+            title.textContent = "Запустите через Telegram чат!";
+            return;
+        }
+
+        try {
+            const response = await fetch(`${SERVER_URL}/get-tracks?user_id=${userId}`);
+            const data = await response.json();
+            
+            playlist = data.tracks || [];
+            
+            if (playlist.length > 0) {
+                updateUI();
+                initTrack(0);
+            } else {
+                title.textContent = "Скиньте MP3 боту!";
             }
-        } else {
-            title.textContent = "Плейлист пуст. Скиньте MP3 боту!";
+        } catch (e) {
+            console.error(e);
+            title.textContent = "Ошибка сети с сервером";
         }
     }
 
@@ -301,26 +260,29 @@
     function changeTrack(index) {
         initTrack(index);
         updateUI();
-        audioCore.play().catch(err => console.log("Ожидание действия пользователя"));
+        audioCore.play().catch(err => console.log("Ожидание клика"));
     }
 
-    function deleteTrack(index) {
+    async function deleteTrack(index) {
+        const userId = tg?.initDataUnsafe?.user?.id || 0;
         if (confirm(`Удалить трек "${playlist[index].name}"?`)) {
-            if (tg) {
-                tg.sendData(JSON.stringify({
-                    action: "delete",
-                    index: index
-                }));
-                tg.close();
+            try {
+                await fetch(`${SERVER_URL}/delete-track`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, index: index })
+                });
+                loadTracksFromServer(); // Перезагружаем список
+            } catch (e) {
+                alert("Не удалось удалить трек");
             }
         }
     }
 
-    // --- УПРАВЛЕНИЕ УСТРОЙСТВОМ ---
     playBtn.addEventListener('click', function() {
         if (playlist.length === 0) return;
         if (audioCore.paused) {
-            audioCore.play().catch(e => alert("Ошибка запуска трека. Проверьте, запущен ли bot.py!"));
+            audioCore.play().catch(e => alert("Ошибка запуска файла. Проверьте сервер."));
         } else {
             audioCore.pause();
         }
@@ -342,13 +304,14 @@
         if (prevIndex < 0) prevIndex = playlist.length - 1;
         changeTrack(prevIndex);
     });
-    
+
     function formatTime(seconds) {
         if (isNaN(seconds)) return "0:00";
         const mins = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);
-        return ${mins}:${secs < 10 ? '0' : ''}${secs};
-        }
+        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
     audioCore.addEventListener('timeupdate', () => {
         if (!audioCore.duration) return;
         timeline.value = (audioCore.currentTime / audioCore.duration) * 100;
@@ -359,16 +322,15 @@
         timeMax.textContent = formatTime(audioCore.duration);
     });
 
-    timeline.addEventListener('input', () => {
+    timeline.addEventListener('input', () => {\
         if (!audioCore.duration) return;
         audioCore.currentTime = (timeline.value / 100) * audioCore.duration;
     });
 
     audioCore.addEventListener('ended', () => nextBtn.click());
 
-    loadPlaylistFromUrl();
+    loadTracksFromServer();
 
     </script>
 </body>
 </html>
-

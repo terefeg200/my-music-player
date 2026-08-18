@@ -220,112 +220,22 @@
     </div>
 
 <script>
-    const fileSelector = document.getElementById('file-selector');
-    const audioCore = document.getElementById('audio-core');
-    const trackList = document.getElementById('track-list');
-    
-    const playBtn = document.getElementById('play-btn');
-    const prevBtn = document.getElementById('prev-btn');
-    const nextBtn = document.getElementById('next-btn');
-    
-    const timeline = document.getElementById('timeline');
-    const timeNow = document.getElementById('time-now');
-    const timeMax = document.getElementById('time-max');
-    const title = document.getElementById('title');
+    // Автоматическая загрузка трека из ссылки от бота при старте
+window.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const trackUrl = urlParams.get('track');
+    const trackName = urlParams.get('name') || "Трек из Telegram";
 
-    let playlist = [];
-    let currentIndex = 0;
-
-    fileSelector.addEventListener('change', function(e) {
-        const files = e.target.files;
-        if (files.length === 0) return;
-
-        const isPlaylistEmpty = playlist.length === 0;
-
-        for (let i = 0; i < files.length; i++) {
-            playlist.push({
-                name: files[i].name,
-                url: URL.createObjectURL(files[i])
-            });
-        }
-
-        updateUI();
-
-        if (isPlaylistEmpty) {
-            changeTrack(0);
-        }
-    });
-
-    function updateUI() {
-        trackList.innerHTML = '';
-        playlist.forEach((track, index) => {
-            const li = document.createElement('li');
-            li.textContent = `${index + 1}. ${track.name}`;
-            if (index === currentIndex) {
-                li.classList.add('active');
-            }
-            li.addEventListener('click', () => changeTrack(index));
-            trackList.appendChild(li);
+    if (trackUrl) {
+        // Добавляем трек от бота в начало плейлиста
+        playlist.push({
+            name: decodeURIComponent(trackName),
+            url: trackUrl
         });
-    }
-
-    function changeTrack(index) {
-        if (index < 0 || index >= playlist.length) return;
-        currentIndex = index;
-        audioCore.src = playlist[index].url;
-        title.textContent = playlist[index].name;
         updateUI();
-        audioCore.play();
+        changeTrack(0, true); // Сразу запускаем
     }
-
-    playBtn.addEventListener('click', function() {
-        if (playlist.length === 0) return;
-        if (audioCore.paused) {
-            audioCore.play();
-        } else {
-            audioCore.pause();
-        }
-    });
-
-    audioCore.addEventListener('play', () => playBtn.textContent = '⏸');
-    audioCore.addEventListener('pause', () => playBtn.textContent = '▶');
-
-    nextBtn.addEventListener('click', function() {
-        if (playlist.length === 0) return;
-        let nextIndex = currentIndex + 1 < playlist.length ? currentIndex + 1 : 0;
-        changeTrack(nextIndex);
-    });
-
-    prevBtn.addEventListener('click', function() {
-        if (playlist.length === 0) return;
-        let prevIndex = currentIndex - 1 >= 0 ? currentIndex - 1 : playlist.length - 1;
-        changeTrack(prevIndex);
-    });
-
-    audioCore.addEventListener('ended', function() {
-        nextBtn.click();
-    });
-
-    audioCore.addEventListener('timeupdate', function() {
-        if (!isNaN(audioCore.duration)) {
-            const progressPct = (audioCore.currentTime / audioCore.duration) * 100;
-            timeline.value = progressPct;
-            timeNow.textContent = formatTime(audioCore.currentTime);
-            timeMax.textContent = formatTime(audioCore.duration);
-        }
-    });
-
-    timeline.addEventListener('input', function() {
-        if (audioCore.duration) {
-            audioCore.currentTime = (timeline.value / 100) * audioCore.duration;
-        }
-    });
-
-    function formatTime(seconds) {
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
-        return `${mins}:${secs}`;
-    }
+});
 </script>
 </body>
 </html>

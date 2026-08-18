@@ -143,10 +143,6 @@
             font-size: 16px;
             cursor: pointer;
             padding: 2px 6px;
-            display: none; /* Покажем только при ховере или если трек активен */
-        }
-        .playlist li:hover .delete-btn {
-            display: inline-block;
         }
     </style>
 </head>
@@ -156,7 +152,7 @@
         <div class="track-info">
             <div class="cover">♫</div>
             <div class="meta">
-                <p class="title" id="title">Плеер пуст</p>
+                <p class="title" id="title">Загрузка...</p>
                 <p class="author">Telegram Cloud</p>
             </div>
         </div>
@@ -180,9 +176,10 @@
     </div>
 
 <script>
+    // Инициализация Telegram Web App
     const tg = window.Telegram.WebApp;
     tg.ready();
-    tg.expand(); // Разворачиваем во весь экран телефона
+    tg.expand(); 
 
     const audioCore = document.getElementById('audio-core');
     const trackList = document.getElementById('track-list');
@@ -197,26 +194,31 @@
     let playlist = [];
     let currentIndex = 0;
 
-    // Парсим треки из URL параметров страницы
+    // Улучшенный и отказоустойчивый парсинг треков из URL [1]
     function loadPlaylistFromUrl() {
-        const urlParams = new URLSearchParams(window.location.search);
+        // Проверяем параметры как в обычной строке, так и за хэшем # (Telegram иногда переносит туда) [1]
+        const searchSource = window.location.search || window.location.hash.substring(window.location.hash.indexOf('?'));
+        const urlParams = new URLSearchParams(searchSource);
         const tracksParam = urlParams.get('tracks');
         
         if (tracksParam) {
             try {
-                playlist = JSON.parse(decodeURIComponent(tracksParam));
-                if (playlist.length > 0) {
+                // Декодируем дважды на случай жесткого экранирования в ТГ
+                const decodedData = decodeURIComponent(decodeURIComponent(tracksParam));
+                playlist = JSON.parse(decodedData);
+                
+                if (Array.isArray(playlist) && playlist.length > 0) {
                     updateUI();
                     initTrack(0);
                 } else {
-                    title.textContent = "Плейлист пуст";
+                    title.textContent = "В плейлисте нет треков";
                 }
             } catch (e) {
-                console.error("Ошибка парсинга плейлиста", e);
-                title.textContent = "Ошибка загрузки";
+                console.error("Ошибка парсинга:", e);
+                title.textContent = "Ошибка структуры данных";
             }
         } else {
-            title.textContent = "Скиньте боту MP3!";
+            title.textContent = "Плейлист пуст. Скиньте MP3 боту!";
         }
     }
 
@@ -226,19 +228,17 @@
             const li = document.createElement('li');
             if (index === currentIndex) li.classList.add('active');
 
-            // Текст названия трека
             const textSpan = document.createElement('span');
             textSpan.className = 'track-name-text';
             textSpan.textContent = `${index + 1}. ${track.name}`;
             textSpan.addEventListener('click', () => changeTrack(index));
             li.appendChild(textSpan);
 
-            // Кнопка удаления трека
             const delBtn = document.createElement('button');
             delBtn.className = 'delete-btn';
             delBtn.textContent = '🗑';
             delBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Чтобы не сработало нажатие на сам трек
+                e.stopPropagation(); 
                 deleteTrack(index);
             });
             li.appendChild(delBtn);
@@ -257,27 +257,24 @@
     function changeTrack(index) {
         initTrack(index);
         updateUI();
-        audioCore.play().catch(err => console.log("Нажмите Play для старта"));
+        audioCore.play().catch(err => console.log("Требуется нажатие Play"));
     }
 
-    // Удаление трека через отправку команды боту
     function deleteTrack(index) {
-        const confirmDelete = confirm(`Удалить трек "${playlist[index].name}"?`);
-        if (confirmDelete) {
-            // Отправляем команду удаления боту
+        if (confirm(`Удалить трек "${playlist[index].name}"?`)) {
             tg.sendData(JSON.stringify({
                 action: "delete",
                 index: index
             }));
-            tg.close(); // Закрываем Web App, бот пришлет обновленную кнопку
+            tg.close(); 
         }
     }
 
-    // --- ПЛЕЕРНЫЕ СОБЫТИЯ И УПРАВЛЕНИЕ ---
+    // --- УПРАВЛЕНИЕ ---
     playBtn.addEventListener('click', function() {
         if (playlist.length === 0) return;
         if (audioCore.paused) {
-            audioCore.play();
+            audioCore.play().catch(e => alert("Ошибка воспроизведения. Проверьте запуск bot.py или ngrok."));
         } else {
             audioCore.pause();
         }
@@ -323,7 +320,9 @@
     });
 
     audioCore.addEventListener('ended', () => nextBtn.click());
+
     loadPlaylistFromUrl();
+    
     </script>
 </body>
 </html>

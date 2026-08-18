@@ -280,99 +280,72 @@
             playlist.push({ name: cleanName, url: URL.createObjectURL(files[i]) });
         }
         updateUI();
-        if (isPlaylistEmpty && playlist.length > 0) changeTrack(0, false);
-    });
-
-    function updateUI() {
+            function updateUI() {
         trackList.innerHTML = '';
         if (playlist.length === 0) {
             title.textContent = "Плеер пуст";
             return;
         }
+
         playlist.forEach((track, index) => {
             const li = document.createElement('li');
-            li.textContent = `${index + 1}. ${track.name}`;
-            if (index === currentIndex) li.classList.add('active');
-            li.addEventListener('click', () => changeTrack(index, true));
+            li.style.display = 'flex';
+            li.style.justifyContent = 'space-between';
+            li.style.alignItems = 'center';
+
+            // Контейнер для текста названия (чтобы кликать и включать)
+            const textSpan = document.createElement('span');
+            textSpan.textContent = `${index + 1}. ${track.name}`;
+            textSpan.style.flexGrow = '1';
+            textSpan.style.overflow = 'hidden';
+            textSpan.style.textOverflow = 'ellipsis';
+            textSpan.addEventListener('click', () => changeTrack(index, true));
+
+            // Кнопка удаления (крестик)
+            const deleteBtn = document.createElement('span');
+            deleteBtn.textContent = '❌';
+            deleteBtn.style.cursor = 'pointer';
+            deleteBtn.style.padding = '0 5px';
+            deleteBtn.style.marginLeft = '10px';
+            deleteBtn.style.fontSize = '12px';
+            deleteBtn.style.transition = 'transform 0.1s';
+            
+            deleteBtn.addEventListener('hover', () => deleteBtn.style.transform = 'scale(1.2)');
+            
+            // Логика клика по крестику
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Запрещаем треку включаться при удалении
+                
+                // Удаляем элемент из массива JavaScript
+                playlist.splice(index, 1);
+                
+                // Если удалили трек, который сейчас играет
+                if (index === currentIndex) {
+                    audioCore.pause();
+                    audioCore.src = '';
+                    title.textContent = "Плеер пуст";
+                } else if (index < currentIndex) {
+                    currentIndex--; // Сдвигаем индекс активного трека назад
+                }
+
+                updateUI(); // Перерисовываем список на экране
+
+                // Отправляем данные боту в Telegram, чтобы он тоже стёр этот трек у себя!
+                if (window.Telegram && window.Telegram.WebApp) {
+                    const dataToSend = { action: "delete", index: index };
+                    window.Telegram.WebApp.sendData(JSON.stringify(dataToSend));
+                }
+            });
+
+            if (index === currentIndex) {
+                li.classList.add('active');
+            }
+
+            li.appendChild(textSpan);
+            li.appendChild(deleteBtn);
             trackList.appendChild(li);
         });
     }
-
-    function changeTrack(index, startPlay = true) {
-        if (playlist.length === 0 || index < 0 || index >= playlist.length) return;
-        currentIndex = index;
-        audioCore.src = playlist[index].url;
-        audioCore.load();
-        title.textContent = playlist[index].name;
-        updateUI();
-        if (startPlay) {
-            audioCore.play().catch(err => console.log("Ожидание клика..."));
-        }
-    }
-
-    playBtn.addEventListener('click', function() {
-        if (playlist.length === 0) return;
-        if (audioCore.paused) {
-            audioCore.play().catch(err => console.error(err));
-        } else {
-            audioCore.pause();
-        }
-    });
-
-    audioCore.addEventListener('play', () => {
-        playBtn.textContent = '⏸';
-        if (coverArt) coverArt.style.animation = 'spin 4s linear infinite';
-    });
-
-    audioCore.addEventListener('pause', () => {
-        playBtn.textContent = '▶';
-        if (coverArt) coverArt.style.animation = 'none';
-    });
-
-    nextBtn.addEventListener('click', function() {
-        if (playlist.length === 0) return;
-        let nextIndex = currentIndex + 1;
-        if (nextIndex >= playlist.length) nextIndex = 0;
-        changeTrack(nextIndex, true);
-    });
-
-    prevBtn.addEventListener('click', function() {
-        if (playlist.length === 0) return;
-        let prevIndex = currentIndex - 1;
-        if (prevIndex < 0) prevIndex = playlist.length - 1;
-        changeTrack(prevIndex, true);
-    });
-
-    function formatTime(seconds) {
-        if (isNaN(seconds) || seconds === Infinity) return "0:00";
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-    }
-
-    audioCore.addEventListener('loadedmetadata', () => {
-        timeline.max = Math.floor(audioCore.duration);
-        timeMax.textContent = formatTime(audioCore.duration);
-    });
-
-    audioCore.addEventListener('timeupdate', () => {
-        if (!isRewinding) {
-            timeline.value = Math.floor(audioCore.currentTime);
-            timeNow.textContent = formatTime(audioCore.currentTime);
-        }
-    });
-
-    timeline.addEventListener('input', () => {
-        isRewinding = true;
-        timeNow.textContent = formatTime(timeline.value);
-    });
-
-    timeline.addEventListener('change', () => {
-        audioCore.currentTime = timeline.value;
-        isRewinding = false;
-    });
-
-    audioCore.addEventListener('ended', () => { nextBtn.click(); });
 
 </script>
 </body>

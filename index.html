@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
+    <script src="https://telegram.org"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YT Music Макси</title>
@@ -220,22 +221,161 @@
     </div>
 
 <script>
-    // Автоматическая загрузка трека из ссылки от бота при старте
-window.addEventListener('DOMContentLoaded', () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const trackUrl = urlParams.get('track');
-    const trackName = urlParams.get('name') || "Трек из Telegram";
+       const fileSelector = document.getElementById('file-selector');
+    const audioCore = document.getElementById('audio-core');
+    const trackList = document.getElementById('track-list');
+    
+    const playBtn = document.getElementById('play-btn');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    
+    const timeline = document.getElementById('timeline');
+    const timeNow = document.getElementById('time-now');
+    const timeMax = document.getElementById('time-max');
+    const title = document.getElementById('title');
+    const coverArt = document.getElementById('cover-art');
 
-    if (trackUrl) {
-        // Добавляем трек от бота в начало плейлиста
-        playlist.push({
-            name: decodeURIComponent(trackName),
-            url: trackUrl
-        });
+    let playlist = [];
+    let currentIndex = 0;
+    let isRewinding = false;
+
+    // --- МАГИЯ СВЯЗИ С ТЕЛЕГРАМОМ ---
+    window.addEventListener('DOMContentLoaded', () => {
+        // Инициализируем Telegram WebApp API
+        const tg = window.Telegram.WebApp;
+        tg.ready(); // Сообщаем ТГ, что приложение загрузилось
+        tg.expand(); // Разворачиваем плеер на весь экран смартфона
+
+        // Берём ID пользователя, который открыл приложение
+        const user = tg.initDataUnsafe?.user;
+        
+        if (user && user.id) {
+            title.textContent = "Загрузка медиатеки...";
+            
+            // Делаем запрос к твоему запущенному Python боту (на порт 5000)
+            // ВАЖНО: Вместо localhost впиши свой IP или адрес туннеля ngrok, если тестируешь с телефона!
+            fetch(`http://localhost:5000/get_playlist?user_id=${user.id}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.length > 0) {
+                        playlist = data;
+                        updateUI();
+                        changeTrack(0, false); // Подгружаем первый трек из базы бота
+                    } else {
+                        title.textContent = "Твой плейлист пуст";
+                    }
+                })
+                .catch(err => {
+                    console.error("Ошибка сети с ботом:", err);
+                    title.textContent = "Ошибка связи с ботом";
+                });
+        } else {
+            title.textContent = "Запущено вне Telegram";
+        }
+    });
+
+    // Обычный выбор файлов кнопкой (оставляем для теста на ПК)
+    fileSelector.addEventListener('change', function(e) {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        const isPlaylistEmpty = playlist.length === 0;
+        for (let i = 0; i < files.length; i++) {
+            const fullName = files[i].name;
+            const cleanName = fullName.substring(0, fullName.lastIndexOf('.')) || fullName;
+            playlist.push({ name: cleanName, url: URL.createObjectURL(files[i]) });
+        }
         updateUI();
-        changeTrack(0, true); // Сразу запускаем
+        if (isPlaylistEmpty && playlist.length > 0) changeTrack(0, false);
+    });
+
+    function updateUI() {
+        trackList.innerHTML = '';
+        if (playlist.length === 0) return;
+        playlist.forEach((track, index) => {
+            const li = document.createElement('li');
+            li.textContent = `${index + 1}. ${track.name}`;
+            if (index === currentIndex) li.classList.add('active');
+            li.addEventListener('click', () => changeTrack(index, true));
+            trackList.appendChild(li);
+        });
     }
-});
+
+    function changeTrack(index, startPlay = true) {
+        if (playlist.length === 0 || index < 0 || index >= playlist.length) return;
+        currentIndex = index;
+        audioCore.src = playlist[index].url;
+        audioCore.load();
+        title.textContent = playlist[index].name;
+        updateUI();
+        if (startPlay) {
+            audioCore.play().catch(err => console.log("Ждем клика..."));
+        }
+    }
+
+    playBtn.addEventListener('click', function() {
+        if (playlist.length === 0) return;
+        if (audioCore.paused) {
+            audioCore.play().catch(err => console.error(err));
+        } else {
+            audioCore.pause();
+        }
+    });
+
+    audioCore.addEventListener('play', () => {
+        playBtn.textContent = '⏸';
+        if (coverArt) coverArt.style.animation = 'spin 4s linear infinite';
+    });
+
+    audioCore.addEventListener('pause', () => {
+        playBtn.textContent = '▶';
+        if (coverArt) coverArt.style.animation = 'none';
+    });
+
+    nextBtn.addEventListener('click', function() {
+        if (playlist.length === 0) return;
+        let nextIndex = currentIndex + 1;
+        if (nextIndex >= playlist.length) nextIndex = 0;
+        changeTrack(nextIndex, true);
+    });
+
+    prevBtn.addEventListener('click', function() {
+        if (playlist.length === 0) return;
+        let prevIndex = currentIndex - 1;
+        if (prevIndex < 0) prevIndex = playlist.length - 1;
+        changeTrack(prevIndex, true);
+    });
+
+    function formatTime(seconds) {
+        if (isNaN(seconds) || seconds === Infinity) return "0:00";
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    audioCore.addEventListener('loadedmetadata', () => {
+        timeline.max = Math.floor(audioCore.duration);
+        timeMax.textContent = formatTime(audioCore.duration);
+    });
+
+    audioCore.addEventListener('timeupdate', () => {
+        if (!isRewinding) {
+            timeline.value = Math.floor(audioCore.currentTime);
+            timeNow.textContent = formatTime(audioCore.currentTime);
+        }
+    });
+
+    timeline.addEventListener('input', () => {
+        isRewinding = true;
+        timeNow.textContent = formatTime(timeline.value);
+    });
+
+    timeline.addEventListener('change', () => {
+        audioCore.currentTime = timeline.value;
+        isRewinding = false;
+    });
+
+    audioCore.addEventListener('ended', () => { nextBtn.click(); });
+
 </script>
 </body>
 </html>

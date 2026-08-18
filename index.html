@@ -184,7 +184,7 @@
     <div class="player-container">
         <!-- Блок трека -->
         <div class="track-info">
-            <div class="cover">♫</div>
+            <div class="cover" id="cover-disc">♫</div>
             <div class="meta">
                 <p class="title" id="title">Плеер пуст</p>
                 <p class="author">Musicspot</p>
@@ -232,6 +232,7 @@
     const timeNow = document.getElementById('time-now');
     const timeMax = document.getElementById('time-max');
     const title = document.getElementById('title');
+    const coverDisc = document.getElementById('cover-disc');
 
     let playlist = [];
     let currentIndex = 0;
@@ -273,11 +274,17 @@
         if (index < 0 || index >= playlist.length) return;
         currentIndex = index;
         audioCore.src = playlist[index].url;
-        title.textContent = playlist[index].name;
+        
+        // Отрезаем расширение файла (.mp3 и т.д.) для красоты
+        title.textContent = playlist[index].name.replace(/\.[^/.]+$/, "");
+        
         updateUI();
         audioCore.play();
     }
 
+    // --- Дописанная и исправленная логика управления ---
+
+    // Кнопка Play/Pause
     playBtn.addEventListener('click', function() {
         if (playlist.length === 0) return;
         if (audioCore.paused) {
@@ -287,45 +294,62 @@
         }
     });
 
-    audioCore.addEventListener('play', () => playBtn.textContent = '⏸');
-    audioCore.addEventListener('pause', () => playBtn.textContent = '▶');
+    // Изменение иконки при старте трека
+    audioCore.addEventListener('play', () => {
+        playBtn.textContent = '⏸';
+    });
 
-    nextBtn.addEventListener('click', function() {
+    // Изменение иконки при паузе
+    audioCore.addEventListener('pause', () => {
+        playBtn.textContent = '▶';
+    });
+
+    // Кнопка Вперед
+    nextBtn.addEventListener('click', () => {
         if (playlist.length === 0) return;
-        let nextIndex = currentIndex + 1 < playlist.length ? currentIndex + 1 : 0;
+        let nextIndex = currentIndex + 1;
+        if (nextIndex >= playlist.length) nextIndex = 0; // Зацикливаем по кругу
         changeTrack(nextIndex);
     });
 
-    prevBtn.addEventListener('click', function() {
+    // Кнопка Назад
+    prevBtn.addEventListener('click', () => {
         if (playlist.length === 0) return;
-        let prevIndex = currentIndex - 1 >= 0 ? currentIndex - 1 : playlist.length - 1;
+        let prevIndex = currentIndex - 1;
+        if (prevIndex < 0) prevIndex = playlist.length - 1; // Переходим в конец очереди
         changeTrack(prevIndex);
     });
 
-    audioCore.addEventListener('ended', function() {
-        nextBtn.click();
-    });
-
-    audioCore.addEventListener('timeupdate', function() {
-        if (!isNaN(audioCore.duration)) {
-            const progressPct = (audioCore.currentTime / audioCore.duration) * 100;
-            timeline.value = progressPct;
-            timeNow.textContent = formatTime(audioCore.currentTime);
-            timeMax.textContent = formatTime(audioCore.duration);
-        }
-    });
-
-    timeline.addEventListener('input', function() {
-        if (audioCore.duration) {
-            audioCore.currentTime = (timeline.value / 100) * audioCore.duration;
-        }
-    });
-
+    // Вспомогательная функция для красивого формата времени (0:00)
     function formatTime(seconds) {
+        if (isNaN(seconds)) return "0:00";
         const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
-        return `${mins}:${secs}`;
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     }
-</script>
+
+    // Обновление таймлайна и текущего времени в процессе воспроизведения
+    audioCore.addEventListener('timeupdate', () => {
+        if (!audioCore.duration) return;
+        const progress = (audioCore.currentTime / audioCore.duration) * 100;
+        timeline.value = progress;
+        timeNow.textContent = formatTime(audioCore.currentTime);
+    });
+
+    audioCore.addEventListener('loadedmetadata', () => {
+    timeMax.textContent = formatTime(audioCore.duration);
+    });
+
+    timeline.addEventListener('input', () => {
+    if (!audioCore.duration) return;
+    const newTime = (timeline.value / 100) * audioCore.duration;
+    audioCore.currentTime = newTime;
+    });
+
+    audioCore.addEventListener('ended', () => {
+    nextBtn.click();
+    });
+
+    </script>
 </body>
 </html>

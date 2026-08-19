@@ -106,28 +106,6 @@
             height: 6px;
         }
 
-        .upload-btn {
-            display: block;
-            text-align: center;
-            font-size: 15px;
-            color: #aaa;
-            border: 2px dashed #444;
-            padding: 14px;
-            border-radius: 8px;
-            cursor: pointer;
-            margin-bottom: 20px;
-            transition: 0.2s;
-        }
-
-        .upload-btn:hover {
-            border-color: #ff55f7;
-            color: #ffffffda;
-        }
-
-        input[type="file"] {
-            display: none;
-        }
-
         .playlist-title {
             font-size: 13px;
             color: #aaa;
@@ -150,9 +128,10 @@
             border-radius: 6px;
             cursor: pointer;
             color: #aaa;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background 0.2s;
         }
 
         .playlist li:hover {
@@ -164,6 +143,29 @@
             color: #ff48ff;
             background: #222;
             font-weight: bold;
+        }
+
+        .track-name {
+            flex-grow: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #ff5555;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 0 5px;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .delete-btn:hover {
+            opacity: 1;
+            transform: scale(1.2);
         }
 
         .loading {
@@ -208,18 +210,16 @@
         </div>
 
         <!-- Очередь -->
-        <div class="playlist-title">Очередь воспроизведения</div>
+        <div class="playlist-title">Очередь воспроизведения (нажмите 🗑 для удаления)</div>
         <ul class="playlist" id="track-list">
             <li class="loading">Загрузка треков...</li>
         </ul>
     </div>
 
     <script>
-        // Получаем user_id из URL
         const urlParams = new URLSearchParams(window.location.search);
         const userId = urlParams.get('user_id');
         
-        // URL для API (замените localhost на ваш ngrok при тестировании с телефона)
         const API_URL = 'http://localhost:8000';
         
         const audioCore = document.getElementById('audio-core');
@@ -261,7 +261,9 @@
                 }
                 
                 updateUI();
-                changeTrack(0, false);
+                if (currentIndex === -1 || currentIndex >= playlist.length) {
+                    changeTrack(0, false);
+                }
             } catch (error) {
                 console.error('Error loading tracks:', error);
                 title.textContent = 'Ошибка загрузки';
@@ -269,15 +271,87 @@
             }
         }
 
+        // Удаление трека
+        async function deleteTrack(index) {
+            if (index < 0 || index >= playlist.length) return;
+            
+            if (!confirm(`Удалить трек «${playlist[index].name}»?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/delete-track`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        user_id: parseInt(userId),
+                        index: index
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Останавливаем воспроизведение, если удаляем текущий трек
+                    if (index === currentIndex) {
+                        audioCore.pause();
+                        audioCore.src = '';
+                        title.textContent = 'Плеер пуст';
+                        currentIndex = -1;
+                    }
+                    
+                    // Удаляем трек из локального плейлиста
+                    playlist.splice(index, 1);
+                    
+                    // Обновляем текущий индекс, если нужно
+                    if (currentIndex > index) {
+                        currentIndex--;
+                    }
+                    
+                    updateUI();
+                    
+                    // Если есть треки и плеер пуст, начинаем с первого
+                    if (playlist.length > 0 && currentIndex === -1) {
+                        changeTrack(0, false);
+                    } else if (playlist.length === 0) {
+                        trackList.innerHTML = '<li class="loading">Нет треков. Отправьте музыку боту в Telegram!</li>';
+                    }
+                } else {
+                    alert('Ошибка при удалении трека');
+                }
+            } catch (error) {
+                console.error('Error deleting track:', error);
+                alert('Не удалось удалить трек. Проверьте соединение с сервером.');
+            }
+        }
+
         function updateUI() {
             trackList.innerHTML = '';
             playlist.forEach((track, index) => {
                 const li = document.createElement('li');
-                li.textContent = `${index + 1}. ${track.name}`;
+                
+                const trackName = document.createElement('span');
+                trackName.className = 'track-name';
+                trackName.textContent = `${index + 1}. ${track.name}`;
+                trackName.addEventListener('click', () => changeTrack(index));
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-btn';
+                deleteBtn.textContent = '🗑';
+                deleteBtn.title = 'Удалить трек';
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteTrack(index);
+                });
+                
                 if (index === currentIndex) {
                     li.classList.add('active');
                 }
-                li.addEventListener('click', () => changeTrack(index));
+                
+                li.appendChild(trackName);
+                li.appendChild(deleteBtn);
                 trackList.appendChild(li);
             });
         }

@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YT Music Макси</title>
-    <!-- Подключаем Telegram WebApp API -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body {
@@ -16,6 +15,7 @@
             align-items: center;
             height: 100vh;
             margin: 0;
+            padding: 20px;
         }
 
         .player-container {
@@ -74,7 +74,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 35px;
+            gap: 25px;
             margin-bottom: 24px;
         }
 
@@ -82,7 +82,7 @@
             background: none;
             border: none;
             color: #ffffffdc;
-            font-size: 36px;
+            font-size: 32px;
             cursor: pointer;
             padding: 5px;
             transition: transform 0.1s;
@@ -91,6 +91,14 @@
         .btn:hover {
             transform: scale(1.1);
             color: #ff6df8;
+        }
+
+        .btn-small {
+            font-size: 24px;
+        }
+
+        .btn.active {
+            color: #ff48ff;
         }
 
         .progress-container {
@@ -106,6 +114,26 @@
             flex-grow: 1;
             cursor: pointer;
             height: 6px;
+        }
+
+        .volume-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            color: #aaa;
+        }
+
+        .volume-icon {
+            font-size: 20px;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        .volume-bar {
+            flex-grow: 1;
+            cursor: pointer;
+            height: 4px;
         }
 
         .playlist-title {
@@ -182,17 +210,16 @@
             color: #ff5555;
         }
         
-        .welcome-message {
-            text-align: center;
-            padding: 20px;
+        .debug-info {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
             background: #222;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-        
-        .welcome-message p {
-            margin: 10px 0;
             color: #aaa;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 10px;
+            display: none;
         }
     </style>
 </head>
@@ -217,11 +244,24 @@
             <span id="time-max">0:00</span>
         </div>
 
+        <!-- Громкость -->
+        <div class="volume-container">
+            <span class="volume-icon" id="volume-icon">🔊</span>
+            <input type="range" class="volume-bar" id="volume-control" value="100" min="0" max="100">
+        </div>
+
         <!-- Кнопки управления -->
         <div class="controls">
-            <button class="btn" id="prev-btn">⏮</button>
-            <button class="btn" id="play-btn" style="font-size: 46px;">▶</button>
-            <button class="btn" id="next-btn">⏭</button>
+            <button class="btn btn-small" id="shuffle-btn" title="Случайное воспроизведение">🔀</button>
+            <button class="btn" id="prev-btn" title="Предыдущий">⏮</button>
+            <button class="btn" id="play-btn" style="font-size: 46px;" title="Плей/Пауза">▶</button>
+            <button class="btn" id="next-btn" title="Следующий">⏭</button>
+            <button class="btn btn-small" id="repeat-btn" title="Повторять">🔁</button>
+        </div>
+
+        <!-- Кнопка обратного порядка -->
+        <div class="controls" style="margin-bottom: 16px;">
+            <button class="btn btn-small" id="reverse-btn" title="Обратный порядок">🔄</button>
         </div>
 
         <!-- Очередь -->
@@ -231,68 +271,86 @@
         </ul>
     </div>
 
+    <div class="debug-info" id="debug-info"></div>
+
     <script>
         // Инициализация Telegram WebApp
         const tg = window.Telegram.WebApp;
         tg.ready();
         tg.expand();
         
-        // Получаем user_id из Telegram WebApp
+        // Получаем user_id
         let userId = null;
         
-        // Способ 1: Из initDataUnsafe (работает в Telegram)
         if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
             userId = tg.initDataUnsafe.user.id;
-            console.log('User ID from Telegram:', userId);
         }
         
-        // Способ 2: Из URL параметров
         if (!userId) {
             const urlParams = new URLSearchParams(window.location.search);
             userId = urlParams.get('user_id');
         }
         
-        // Способ 3: Из localStorage
         if (!userId) {
             userId = localStorage.getItem('telegram_user_id');
         }
         
-        // Сохраняем userId
         if (userId) {
             localStorage.setItem('telegram_user_id', userId);
         }
         
-        // URL для API
+        // ВАЖНО: Укажите ваш актуальный URL здесь
         const API_URL = 'https://earned-editorials-wait-bye.trycloudflare.com';
-        // Замените на ваш ngrok при тестировании с телефона
         
         const audioCore = document.getElementById('audio-core');
         const trackList = document.getElementById('track-list');
-        
         const playBtn = document.getElementById('play-btn');
         const prevBtn = document.getElementById('prev-btn');
         const nextBtn = document.getElementById('next-btn');
-        
+        const shuffleBtn = document.getElementById('shuffle-btn');
+        const repeatBtn = document.getElementById('repeat-btn');
+        const reverseBtn = document.getElementById('reverse-btn');
         const timeline = document.getElementById('timeline');
         const timeNow = document.getElementById('time-now');
         const timeMax = document.getElementById('time-max');
         const title = document.getElementById('title');
-
+        const volumeControl = document.getElementById('volume-control');
+        const volumeIcon = document.getElementById('volume-icon');
+        const debugInfo = document.getElementById('debug-info');
+        
         let playlist = [];
         let currentIndex = -1;
-
-        // Загрузка треков с сервера
+        let isShuffle = false;
+        let isRepeat = false;
+        let isReversed = false;
+        
+        // Показать отладочную информацию
+        function showDebug(message) {
+            console.log(message);
+            debugInfo.textContent = message;
+            debugInfo.style.display = 'block';
+            setTimeout(() => {
+                debugInfo.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Загрузка треков
         async function loadTracks() {
             if (!userId) {
                 title.textContent = 'Откройте через Telegram';
                 trackList.innerHTML = '<li class="loading">Пожалуйста, откройте плеер через бота в Telegram</li>';
                 return;
             }
-
+            
             try {
-                const response = await fetch(`${API_URL}/get-tracks?user_id=${userId}`);
+                const response = await fetch(`${API_URL}/get-tracks?user_id=${userId}`, {
+                    headers: {
+                        'bypass-tunnel-reminder': 'true'
+                    }
+                });
+                
                 if (!response.ok) {
-                    throw new Error('Network response was not ok');
+                    throw new Error(`HTTP ${response.status}`);
                 }
                 
                 const data = await response.json();
@@ -311,23 +369,22 @@
             } catch (error) {
                 console.error('Error loading tracks:', error);
                 title.textContent = 'Ошибка загрузки';
-                trackList.innerHTML = '<li class="error">Не удалось загрузить треки. Проверьте, запущен ли сервер.</li>';
+                trackList.innerHTML = `<li class="error">Не удалось загрузить треки. ${error.message}</li>`;
             }
         }
-
+        
         // Удаление трека
         async function deleteTrack(index) {
             if (index < 0 || index >= playlist.length) return;
             
-            if (!confirm(`Удалить трек «${playlist[index].name}»?`)) {
-                return;
-            }
+            if (!confirm(`Удалить трек «${playlist[index].name}»?`)) return;
             
             try {
                 const response = await fetch(`${API_URL}/delete-track`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'bypass-tunnel-reminder': 'true'
                     },
                     body: JSON.stringify({
                         user_id: parseInt(userId),
@@ -346,10 +403,7 @@
                     }
                     
                     playlist.splice(index, 1);
-                    
-                    if (currentIndex > index) {
-                        currentIndex--;
-                    }
+                    if (currentIndex > index) currentIndex--;
                     
                     updateUI();
                     
@@ -358,15 +412,13 @@
                     } else if (playlist.length === 0) {
                         trackList.innerHTML = '<li class="loading">Нет треков. Отправьте музыку боту в Telegram!</li>';
                     }
-                } else {
-                    alert('Ошибка при удалении трека');
                 }
             } catch (error) {
                 console.error('Error deleting track:', error);
-                alert('Не удалось удалить трек. Проверьте соединение с сервером.');
+                alert('Не удалось удалить трек');
             }
         }
-
+        
         function updateUI() {
             trackList.innerHTML = '';
             playlist.forEach((track, index) => {
@@ -380,22 +432,19 @@
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'delete-btn';
                 deleteBtn.textContent = '🗑';
-                deleteBtn.title = 'Удалить трек';
                 deleteBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     deleteTrack(index);
                 });
                 
-                if (index === currentIndex) {
-                    li.classList.add('active');
-                }
+                if (index === currentIndex) li.classList.add('active');
                 
                 li.appendChild(trackName);
                 li.appendChild(deleteBtn);
                 trackList.appendChild(li);
             });
         }
-
+        
         function changeTrack(index, autoplay = true) {
             if (index < 0 || index >= playlist.length) return;
             currentIndex = index;
@@ -404,62 +453,155 @@
             updateUI();
             
             if (autoplay) {
-                audioCore.play().catch(e => {
-                    console.error('Playback error:', e);
-                });
+                audioCore.play().catch(e => console.error('Playback error:', e));
             }
         }
-
+        
+        // Получить следующий индекс с учетом shuffle
+        function getNextIndex() {
+            if (isShuffle) {
+                let randomIndex;
+                do {
+                    randomIndex = Math.floor(Math.random() * playlist.length);
+                } while (randomIndex === currentIndex && playlist.length > 1);
+                return randomIndex;
+            }
+            
+            if (isReversed) {
+                return currentIndex - 1 >= 0 ? currentIndex - 1 : playlist.length - 1;
+            }
+            
+            return currentIndex + 1 < playlist.length ? currentIndex + 1 : 0;
+        }
+        
+        // Получить предыдущий индекс с учетом shuffle
+        function getPrevIndex() {
+            if (isShuffle) {
+                let randomIndex;
+                do {
+                    randomIndex = Math.floor(Math.random() * playlist.length);
+                } while (randomIndex === currentIndex && playlist.length > 1);
+                return randomIndex;
+            }
+            
+            if (isReversed) {
+                return currentIndex + 1 < playlist.length ? currentIndex + 1 : 0;
+            }
+            
+            return currentIndex - 1 >= 0 ? currentIndex - 1 : playlist.length - 1;
+        }
+        
+        // Обработчики кнопок
         playBtn.addEventListener('click', function() {
             if (playlist.length === 0) return;
-            if (audioCore.paused) {
-                audioCore.play();
-            } else {
-                audioCore.pause();
-            }
+            if (audioCore.paused) audioCore.play();
+            else audioCore.pause();
         });
-
+        
         audioCore.addEventListener('play', () => playBtn.textContent = '⏸');
         audioCore.addEventListener('pause', () => playBtn.textContent = '▶');
-
+        
         nextBtn.addEventListener('click', function() {
             if (playlist.length === 0) return;
-            let nextIndex = currentIndex + 1 < playlist.length ? currentIndex + 1 : 0;
-            changeTrack(nextIndex);
+            changeTrack(getNextIndex());
         });
-
+        
         prevBtn.addEventListener('click', function() {
             if (playlist.length === 0) return;
-            let prevIndex = currentIndex - 1 >= 0 ? currentIndex - 1 : playlist.length - 1;
-            changeTrack(prevIndex);
+            changeTrack(getPrevIndex());
         });
-
+        
+        // Shuffle
+        shuffleBtn.addEventListener('click', function() {
+            isShuffle = !isShuffle;
+            if (isShuffle) {
+                shuffleBtn.classList.add('active');
+                showDebug('🔀 Случайное воспроизведение включено');
+            } else {
+                shuffleBtn.classList.remove('active');
+                showDebug('🔀 Случайное воспроизведение выключено');
+            }
+        });
+        
+        // Repeat
+        repeatBtn.addEventListener('click', function() {
+            isRepeat = !isRepeat;
+            audioCore.loop = isRepeat;
+            if (isRepeat) {
+                repeatBtn.classList.add('active');
+                showDebug('🔁 Повтор включен');
+            } else {
+                repeatBtn.classList.remove('active');
+                showDebug('🔁 Повтор выключен');
+            }
+        });
+        
+        // Reverse order
+        reverseBtn.addEventListener('click', function() {
+            isReversed = !isReversed;
+            if (isReversed) {
+                reverseBtn.classList.add('active');
+                showDebug('🔄 Обратный порядок включен');
+            } else {
+                reverseBtn.classList.remove('active');
+                showDebug('🔄 Обратный порядок выключен');
+            }
+        });
+        
+        // Обработка окончания трека
         audioCore.addEventListener('ended', function() {
-            nextBtn.click();
+            if (isRepeat) {
+                // Если repeat включен, просто перезапускаем текущий трек
+                audioCore.currentTime = 0;
+                audioCore.play();
+            } else {
+                nextBtn.click();
+            }
         });
-
+        
+        // Громкость
+        volumeControl.addEventListener('input', function() {
+            audioCore.volume = volumeControl.value / 100;
+            updateVolumeIcon();
+        });
+        
+        function updateVolumeIcon() {
+            const volume = audioCore.volume;
+            if (volume === 0) {
+                volumeIcon.textContent = '🔇';
+            } else if (volume < 0.5) {
+                volumeIcon.textContent = '🔉';
+            } else {
+                volumeIcon.textContent = '🔊';
+            }
+        }
+        
+        // Прогресс
         audioCore.addEventListener('timeupdate', function() {
             if (!isNaN(audioCore.duration)) {
-                const progressPct = (audioCore.currentTime / audioCore.duration) * 100;
-                timeline.value = progressPct;
+                timeline.value = (audioCore.currentTime / audioCore.duration) * 100;
                 timeNow.textContent = formatTime(audioCore.currentTime);
                 timeMax.textContent = formatTime(audioCore.duration);
             }
         });
-
+        
         timeline.addEventListener('input', function() {
             if (audioCore.duration) {
                 audioCore.currentTime = (timeline.value / 100) * audioCore.duration;
             }
         });
-
+        
         function formatTime(seconds) {
             const mins = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
             return `${mins}:${secs}`;
         }
-
-        // Загружаем треки при старте
+        
+        // Установка начальной громкости
+        audioCore.volume = 1.0;
+        updateVolumeIcon();
+        
+        // Запуск
         loadTracks();
     </script>
 </body>

@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YT Music Макси</title>
+    <!-- Подключаем Telegram WebApp API -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -180,31 +182,17 @@
             color: #ff5555;
         }
         
-        .user-input-container {
-            display: none;
-            margin-bottom: 20px;
+        .welcome-message {
             text-align: center;
-        }
-        
-        .user-input-container input {
+            padding: 20px;
             background: #222;
-            border: 1px solid #444;
-            color: #fff;
-            padding: 10px;
-            border-radius: 8px;
-            width: 80%;
-            margin-bottom: 10px;
-            font-size: 16px;
+            border-radius: 10px;
+            margin-bottom: 20px;
         }
         
-        .user-input-container button {
-            background: #fa6cff;
-            border: none;
-            color: #fff;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
+        .welcome-message p {
+            margin: 10px 0;
+            color: #aaa;
         }
     </style>
 </head>
@@ -236,13 +224,6 @@
             <button class="btn" id="next-btn">⏭</button>
         </div>
 
-        <!-- Поле для ввода user_id (если не удалось получить автоматически) -->
-        <div class="user-input-container" id="user-input-container">
-            <p>Введите ваш Telegram ID:</p>
-            <input type="text" id="user-id-input" placeholder="Например: 123456789">
-            <button onclick="setUserId()">Подтвердить</button>
-        </div>
-
         <!-- Очередь -->
         <div class="playlist-title">Очередь воспроизведения</div>
         <ul class="playlist" id="track-list">
@@ -251,56 +232,38 @@
     </div>
 
     <script>
-        // Получаем user_id разными способами
+        // Инициализация Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        
+        // Получаем user_id из Telegram WebApp
         let userId = null;
         
-        // Способ 1: Из URL параметров
-        const urlParams = new URLSearchParams(window.location.search);
-        userId = urlParams.get('user_id');
-        
-        // Способ 2: Из Telegram WebApp объекта
-        if (!userId && window.Telegram && window.Telegram.WebApp) {
-            const tg = window.Telegram.WebApp;
-            tg.ready();
-            tg.expand();
-            
-            // Пытаемся получить user_id из initData
-            if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-                userId = tg.initDataUnsafe.user.id;
-            }
+        // Способ 1: Из initDataUnsafe (работает в Telegram)
+        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+            userId = tg.initDataUnsafe.user.id;
+            console.log('User ID from Telegram:', userId);
         }
         
-        // Способ 3: Из localStorage (если ранее был сохранен)
+        // Способ 2: Из URL параметров
+        if (!userId) {
+            const urlParams = new URLSearchParams(window.location.search);
+            userId = urlParams.get('user_id');
+        }
+        
+        // Способ 3: Из localStorage
         if (!userId) {
             userId = localStorage.getItem('telegram_user_id');
         }
         
-        // Если userId найден, сохраняем его
+        // Сохраняем userId
         if (userId) {
             localStorage.setItem('telegram_user_id', userId);
-        } else {
-            // Показываем поле для ручного ввода
-            document.getElementById('user-input-container').style.display = 'block';
-            document.getElementById('title').textContent = 'Введите ваш ID';
-        }
-        
-        // Функция для установки user_id вручную
-        function setUserId() {
-            const input = document.getElementById('user-id-input');
-            const value = input.value.trim();
-            
-            if (value && !isNaN(value)) {
-                userId = value;
-                localStorage.setItem('telegram_user_id', userId);
-                document.getElementById('user-input-container').style.display = 'none';
-                loadTracks();
-            } else {
-                alert('Пожалуйста, введите корректный Telegram ID');
-            }
         }
         
         // URL для API
-        const API_URL = 'http://localhost:8000';
+        const API_URL = 'http://localhost:8000'; // Замените на ваш ngrok при тестировании с телефона
         
         const audioCore = document.getElementById('audio-core');
         const trackList = document.getElementById('track-list');
@@ -320,8 +283,8 @@
         // Загрузка треков с сервера
         async function loadTracks() {
             if (!userId) {
-                title.textContent = 'Ошибка: нет user_id';
-                trackList.innerHTML = '<li class="error">Не удалось определить пользователя</li>';
+                title.textContent = 'Откройте через Telegram';
+                trackList.innerHTML = '<li class="loading">Пожалуйста, откройте плеер через бота в Telegram</li>';
                 return;
             }
 
@@ -495,12 +458,8 @@
             return `${mins}:${secs}`;
         }
 
-        // Загружаем треки, если есть userId
-        if (userId) {
-            loadTracks();
-        } else {
-            console.log('UserId not found. Waiting for manual input...');
-        }
+        // Загружаем треки при старте
+        loadTracks();
     </script>
 </body>
 </html>

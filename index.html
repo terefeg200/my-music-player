@@ -179,6 +179,33 @@
             padding: 20px;
             color: #ff5555;
         }
+        
+        .user-input-container {
+            display: none;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .user-input-container input {
+            background: #222;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            width: 80%;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        
+        .user-input-container button {
+            background: #fa6cff;
+            border: none;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
     </style>
 </head>
 <body>
@@ -209,17 +236,70 @@
             <button class="btn" id="next-btn">⏭</button>
         </div>
 
+        <!-- Поле для ввода user_id (если не удалось получить автоматически) -->
+        <div class="user-input-container" id="user-input-container">
+            <p>Введите ваш Telegram ID:</p>
+            <input type="text" id="user-id-input" placeholder="Например: 123456789">
+            <button onclick="setUserId()">Подтвердить</button>
+        </div>
+
         <!-- Очередь -->
-        <div class="playlist-title">Очередь воспроизведения (нажмите 🗑 для удаления)</div>
+        <div class="playlist-title">Очередь воспроизведения</div>
         <ul class="playlist" id="track-list">
             <li class="loading">Загрузка треков...</li>
         </ul>
     </div>
 
     <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const userId = urlParams.get('user_id');
+        // Получаем user_id разными способами
+        let userId = null;
         
+        // Способ 1: Из URL параметров
+        const urlParams = new URLSearchParams(window.location.search);
+        userId = urlParams.get('user_id');
+        
+        // Способ 2: Из Telegram WebApp объекта
+        if (!userId && window.Telegram && window.Telegram.WebApp) {
+            const tg = window.Telegram.WebApp;
+            tg.ready();
+            tg.expand();
+            
+            // Пытаемся получить user_id из initData
+            if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+                userId = tg.initDataUnsafe.user.id;
+            }
+        }
+        
+        // Способ 3: Из localStorage (если ранее был сохранен)
+        if (!userId) {
+            userId = localStorage.getItem('telegram_user_id');
+        }
+        
+        // Если userId найден, сохраняем его
+        if (userId) {
+            localStorage.setItem('telegram_user_id', userId);
+        } else {
+            // Показываем поле для ручного ввода
+            document.getElementById('user-input-container').style.display = 'block';
+            document.getElementById('title').textContent = 'Введите ваш ID';
+        }
+        
+        // Функция для установки user_id вручную
+        function setUserId() {
+            const input = document.getElementById('user-id-input');
+            const value = input.value.trim();
+            
+            if (value && !isNaN(value)) {
+                userId = value;
+                localStorage.setItem('telegram_user_id', userId);
+                document.getElementById('user-input-container').style.display = 'none';
+                loadTracks();
+            } else {
+                alert('Пожалуйста, введите корректный Telegram ID');
+            }
+        }
+        
+        // URL для API
         const API_URL = 'http://localhost:8000';
         
         const audioCore = document.getElementById('audio-core');
@@ -294,7 +374,6 @@
                 const data = await response.json();
                 
                 if (data.status === 'success') {
-                    // Останавливаем воспроизведение, если удаляем текущий трек
                     if (index === currentIndex) {
                         audioCore.pause();
                         audioCore.src = '';
@@ -302,17 +381,14 @@
                         currentIndex = -1;
                     }
                     
-                    // Удаляем трек из локального плейлиста
                     playlist.splice(index, 1);
                     
-                    // Обновляем текущий индекс, если нужно
                     if (currentIndex > index) {
                         currentIndex--;
                     }
                     
                     updateUI();
                     
-                    // Если есть треки и плеер пуст, начинаем с первого
                     if (playlist.length > 0 && currentIndex === -1) {
                         changeTrack(0, false);
                     } else if (playlist.length === 0) {
@@ -419,8 +495,12 @@
             return `${mins}:${secs}`;
         }
 
-        // Загружаем треки при старте
-        loadTracks();
+        // Загружаем треки, если есть userId
+        if (userId) {
+            loadTracks();
+        } else {
+            console.log('UserId not found. Waiting for manual input...');
+        }
     </script>
 </body>
 </html>
